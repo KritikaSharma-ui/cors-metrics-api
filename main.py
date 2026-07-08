@@ -132,7 +132,7 @@ def coerce(key: str, value: str):
 
 
 @app.get("/effective-config")
-async def effective_config(request: Request, set: List[str] = []):
+async def effective_config(request: Request):
     # Layer 1: hardcoded defaults
     config = {
         "port": 8000,
@@ -179,7 +179,8 @@ async def effective_config(request: Request, set: List[str] = []):
             config[cfg_key] = coerce(cfg_key, val)
 
     # Layer 5: CLI overrides from ?set=key=value query params (highest precedence)
-    for item in set:
+    set_params = request.query_params.getlist("set")
+    for item in set_params:
         if "=" in item:
             k, v = item.split("=", 1)
             config[k] = coerce(k, v)
