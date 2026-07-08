@@ -76,6 +76,11 @@ class StrictCORSMiddleware(BaseHTTPMiddleware):
 app.add_middleware(StrictCORSMiddleware)
 
 
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
+
 # ── Q1: /stats ──────────────────────────────────────────────────────────────
 @app.get("/stats")
 async def get_stats(values: str):
