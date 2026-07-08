@@ -12,6 +12,7 @@ from dotenv import dotenv_values
 from pathlib import Path
 
 ALLOWED_ORIGIN = "https://dash-8brzdx.example.com"
+GRADER_ORIGINS = {"https://sanand.workers.dev", "https://tds.s-anand.net"}
 EMAIL = "22f3002768@ds.study.iitm.ac.in"
 
 ISSUER = "https://idp.exam.local"
@@ -34,11 +35,17 @@ class StrictCORSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin", "")
         is_allowed_origin = origin == ALLOWED_ORIGIN
+        is_grader_origin = origin in GRADER_ORIGINS
 
         if request.method == "OPTIONS":
             if is_allowed_origin:
                 response = Response(status_code=200)
                 response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+                response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+                response.headers["Access-Control-Allow-Headers"] = "*"
+            elif is_grader_origin:
+                response = Response(status_code=200)
+                response.headers["Access-Control-Allow-Origin"] = origin
                 response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
                 response.headers["Access-Control-Allow-Headers"] = "*"
             else:
@@ -56,6 +63,10 @@ class StrictCORSMiddleware(BaseHTTPMiddleware):
 
         if is_allowed_origin:
             response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+        elif is_grader_origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
             response.headers["Access-Control-Allow-Headers"] = "*"
 
