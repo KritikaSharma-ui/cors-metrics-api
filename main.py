@@ -1,10 +1,15 @@
 import time
 import uuid
+import os
+import yaml
 import jwt
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
+from typing import List
+from dotenv import dotenv_values
+from pathlib import Path
 
 ALLOWED_ORIGIN = "https://dash-8brzdx.example.com"
 EMAIL = "22f3002768@ds.study.iitm.ac.in"
@@ -114,3 +119,72 @@ async def verify_token(body: TokenRequest):
         return JSONResponse(status_code=401, content={"valid": False, "error": "Invalid signature"})
     except Exception as e:
         return JSONResponse(status_code=401, content={"valid": False, "error": str(e)})
+
+
+# ── Q3: /effective-config ────────────────────────────────────────────────────
+def coerce(key: str, value: str):
+    """Apply type coercion rules."""
+    if key in ("port", "workers"):
+        return int(value)
+    if key == "debug":
+        return str(value).lower() in ("true", "1", "yes", "on")
+    return str(value)
+
+
+@app.get("/effective-config")
+async def effective_config(request: Request, set: List[str] = []):
+    # Layer 1: hardcoded defaults
+    config = {
+        "port": 8000,
+        "workers": 1,
+        "debug": False,
+        "log_level": "info",
+        "api_key": "default-secret-000",
+    }
+
+    # Layer 2: config.development.yaml
+    yaml_path = Path(__file__).parent / "config.development.yaml"
+    if yaml_path.exists():
+        with open(yaml_path) as f:
+            yaml_data = yaml.safe_load(f) or {}
+        for k, v in yaml_data.items():
+            config[k] = coerce(k, str(v))
+
+    # Layer 3: .env file (NUM_WORKERS → workers alias)
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        env_vals = dotenv_values(env_path)
+        mapping = {
+            "APP_PORT": "port",
+            "APP_DEBUG": "debug",
+            "APP_LOG_LEVEL": "log_level",
+            "APP_API_KEY": "api_key",
+            "NUM_WORKERS": "workers",
+        }
+        for env_key, cfg_key in mapping.items():
+            if env_key in env_vals:
+                config[cfg_key] = coerce(cfg_key, env_vals[env_key])
+
+    # Layer 4: OS environment variables with APP_* prefix
+    os_mapping = {
+        "APP_PORT": "port",
+        "APP_WORKERS": "workers",
+        "APP_DEBUG": "debug",
+        "APP_LOG_LEVEL": "log_level",
+        "APP_API_KEY": "api_key",
+    }
+    for env_key, cfg_key in os_mapping.items():
+        val = os.environ.get(env_key)
+        if val is not None:
+            config[cfg_key] = coerce(cfg_key, val)
+
+    # Layer 5: CLI overrides from ?set=key=value query params (highest precedence)
+    for item in set:
+        if "=" in item:
+            k, v = item.split("=", 1)
+            config[k] = coerce(k, v)
+
+    # Mask api_key
+    config["api_key"] = "****"
+
+    return config
